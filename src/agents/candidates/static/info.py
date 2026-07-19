@@ -173,7 +173,3 @@ def run(observed: str) -> list:
         check_info_003(observed),
     ]
     return [f for f in results if f]
-        check_info_002(observed),
-        check_info_003(observed),
-    ]
-    return [f for f in results if f]
