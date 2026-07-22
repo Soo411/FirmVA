@@ -15,7 +15,7 @@
 #  Report     -> report.txt
 ########################################################
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -86,6 +86,13 @@ class Observation(BaseModel):
     reproduced: bool = False         # 실제 재현/동작했는지
     result: str = ""                 # 예: "SIGSEGV at 0x42424242"
     trace: str = ""                  # strace/ltrace/로그 표본
+    input_privilege: Optional[
+        Literal["unauthenticated", "low", "root"]
+    ] = None                                 # 공격자의 초기 접근 수준
+    exploit_succeeded: Optional[bool] = None  # 공격 자체의 성공 여부
+    uid_before: Optional[int] = None          # 공격 전 세션/실행 컨텍스트 UID
+    uid_after: Optional[int] = None           # 공격 후 프로세스/세션 UID
+    root_shell_obtained: Optional[bool] = None  # root 셸 획득 여부
 
 # Dynamic Analysis Agent 결과.
 # observations만 Candidate 로 넘기고, new_entrypoints 는 넘기지 않고 따로 기록
