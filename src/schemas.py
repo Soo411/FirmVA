@@ -16,7 +16,24 @@
 ########################################################
 
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+class LLMVerdict(BaseModel):
+    """OpenAI Structured Outputs로 받는 취약점 판정 형식."""
+
+    verdict: Literal["vulnerable", "not_vulnerable"]
+    severity: Literal["low", "medium", "high"]
+    confidence: float
+    evidence: str
+
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, value: float) -> float:
+        # OpenAI JSON Schema의 지원 범위와 무관하게 애플리케이션에서 강제한다.
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("confidence는 0.0 이상 1.0 이하여야 합니다")
+        return value
 
 
 # 2번: Analysis Agent 출력
@@ -54,10 +71,10 @@ class StaticRaw(BaseModel):
 class Finding(BaseModel):
     istg_id: str                        # 예: ISTG-FW-SCRT-003
     name: str                           # 예: Usage of Hardcoded Secrets
-    phase: str                          # "static" 또는 "dynamic"
-    verdict: str = "vulnerable"
-    severity: str = "medium"            # low / medium / high
-    confidence: float = 0.5             # 0.0 ~ 1.0
+    phase: Literal["static", "dynamic"]
+    verdict: Literal["vulnerable"] = "vulnerable"
+    severity: Literal["low", "medium", "high"] = "medium"
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     evidence: str = ""                  # 판정 근거(관찰된 데이터)
     location: str = ""                  # 어디서 발견했는지(파일/진입점)
 
