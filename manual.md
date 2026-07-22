@@ -73,7 +73,10 @@ python ~/FirmVA/mcp/ghidra/GhidraMCP-release-1-4/bridge_mcp_ghidra.py \
 
 # 8)  bridge 연결 확인
 # bridge가 뜬 상태에서 .env 확인: GHIDRA_MCP_URL=http://127.0.0.1:8081/sse
-# 그리고 tools/ghidra.py의 MCP 클라이언트가 이 URL로 붙는지 확인
+# CodeBrowser에 현재 열어 둔 바이너리의 rootfs 내부 경로도 기록 가능(선택)
+# GHIDRA_BINARY_PATH=/home/httpd/cgi-bin/timepro.cgi
+# 그리고 src/tools/ghidra_mcp.py의 MCP 클라이언트가 이 URL로 붙는지 확인
+# 실제 모드에서는 MCP 연결/호출 실패 시 데모로 대체하지 않고 분석을 중단
 ```
 <br/>
 
@@ -88,6 +91,10 @@ python run.py demo.bin
 
 
 ## 6.FirmVA 전체 실행: API 사용 (DEMO_MODE=false)
+실제 실행 전 `.env`에 `OPENAI_API_KEY`를 설정해야 합니다. QEMU 구현 또는
+연결 전 정적 파이프라인만 검증하려면 `ENABLE_DYNAMIC_ANALYSIS=false`로
+설정합니다. 기본값 `true`는 기존 전체 파이프라인을 유지합니다.
+
 ```bash
 # 1. run.py 실행
 python run.py data/input/*.bin

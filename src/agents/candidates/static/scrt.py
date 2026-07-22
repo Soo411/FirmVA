@@ -1,8 +1,15 @@
-# candidates/static/scrt.py: Secrets candidate checks
+# candidates/static/scrt.py: 비밀정보(Secrets) 계열 (한 파일로 통합)
 ########################################################
 # ISTG-FW-SCRT-001  Secrets Stored in Public Storage
 # ISTG-FW-SCRT-002  Unencrypted Storage of Secrets
 # ISTG-FW-SCRT-003  Usage of Hardcoded Secrets
+
+# 통합 이유:
+# 세 항목 모두 '파일/문자열 안의 비밀정보(키·비밀번호·인증서)'라는
+# 같은 관찰 데이터를 근거로, 저장 위치/암호화 여부/하드코딩 여부만 달리 봄
+
+# 입력 : observed (StaticRaw JSON)
+# 출력 : 취약 판정 Finding 목록
 ########################################################
 
 import json

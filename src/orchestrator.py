@@ -33,12 +33,22 @@
 ########################################################
 
 from langgraph.graph import StateGraph, START, END
+from . import config
 from .state import FirmState
 from .agents import analysis, static, surface, dynamic, report
 from .agents import candidates
 
 
-def build_graph():
+def build_graph(enable_dynamic: bool | None = None):
+    """FirmVA 그래프를 구성한다.
+
+    ``enable_dynamic=False``는 QEMU 노드만 제외한다. Attack Surface는 정적
+    관찰 데이터로 생성되는 FirmVA 산출물이므로 두 모드 모두 유지한다.
+    """
+    config.validate_runtime()
+    if enable_dynamic is None:
+        enable_dynamic = config.ENABLE_DYNAMIC_ANALYSIS
+
     g = StateGraph(FirmState)
 
     # 노드(에이전트) 등록
@@ -46,8 +56,9 @@ def build_graph():
     g.add_node("static", static.run)                         # 3
     g.add_node("candidate_static", candidates.run_static)    # 4(1)
     g.add_node("surface", surface.run)                       # 4(2)
-    g.add_node("dynamic", dynamic.run)                       # 5
-    g.add_node("candidate_dynamic", candidates.run_dynamic)  # 6
+    if enable_dynamic:
+        g.add_node("dynamic", dynamic.run)                       # 5
+        g.add_node("candidate_dynamic", candidates.run_dynamic)  # 6
 
     # defer=True: 정적/동적 두 갈래는 길이가 달라 끝나는 시점이 다름
     # 이 옵션을 주면 report 는 '모든 갈래가 끝날 때까지 기다렸다가' 딱 한 번만 실행
@@ -61,13 +72,18 @@ def build_graph():
     g.add_edge("static", "candidate_static")
     g.add_edge("static", "surface")
 
-    # 공격표면 -> 동적 분석 -> 동적 후보 (병렬실행2는 candidate_dynamic 내부의 3개)
-    g.add_edge("surface", "dynamic")
-    g.add_edge("dynamic", "candidate_dynamic")
-
-    # 두 갈래(정적 후보 / 동적 후보)가 모두 끝나면 report로 합류
+    # 정적 후보는 항상 보고서로 전달
     g.add_edge("candidate_static", "report")
-    g.add_edge("candidate_dynamic", "report")
+
+    if enable_dynamic:
+        # 공격표면 -> 동적 분석 -> 동적 후보
+        g.add_edge("surface", "dynamic")
+        g.add_edge("dynamic", "candidate_dynamic")
+        g.add_edge("candidate_dynamic", "report")
+    else:
+        # 정적 전용 모드에서도 Attack Surface 생성 완료 후 보고서를 작성
+        g.add_edge("surface", "report")
+
     g.add_edge("report", END)
 
     return g.compile()

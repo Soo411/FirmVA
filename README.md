@@ -13,6 +13,9 @@
 ## 2. 환경 설정 및 실행 방법
 
 `manual.md`를 참고하십시오.
+
+`ENABLE_DYNAMIC_ANALYSIS=false`로 설정하면 Attack Surface까지 생성한 뒤
+QEMU 단계를 건너뛰고 정적 분석 결과만 보고서로 생성합니다.
 <br/><br/>
 
 ## 3. 에이전트별 역할 및 데이터 형식
