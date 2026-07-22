@@ -63,9 +63,22 @@ def run(bin_path: str) -> dict:
         )
 
     scan_text = scan.stdout.lower()
+
+    # --- 아키텍처/엔디안 판별 ---
+    # 1차: rootfs 안의 실제 ELF 실행 파일을 file 명령으로 스캔 (가장 신뢰도 높음).
+    #      압축 해제 전 시그니처 스캔 텍스트에는 대부분 "mips"/"arm" 같은 단어가
+    #      나오지 않아 _guess_arch() 만으로는 거의 항상 "unknown" 이 되기 때문.
+    arch, endian_from_binary = _guess_arch_from_binaries(rootfs)
+
+    # 2차 fallback: 그래도 못 찾으면 시그니처 스캔 텍스트에서 보조적으로 시도
+    if arch == "unknown":
+        arch = _guess_arch(signatures)
+
+    endian = endian_from_binary if endian_from_binary != "unknown" else _guess_endian(scan_text)
+
     return {
-        "arch": _guess_arch(signatures),
-        "endian": _guess_endian(scan_text),
+        "arch": arch,
+        "endian": endian,
         "signatures": signatures,
         "rootfs": str(rootfs.resolve()),
         "kernel": _find_first(extraction_workdir, ["*uImage*", "*zImage*", "*kernel*"]),
@@ -108,6 +121,9 @@ def _execute(
 
 # 이하 보조 함수들
 def _guess_arch(signatures: list[str]) -> str:
+    """binwalk 1차 시그니처 스캔 텍스트에서 아키텍처를 추정 (보조 수단).
+    대부분의 펌웨어는 커널/rootfs가 압축돼 있어 이 텍스트만으로는
+    아키텍처가 드러나지 않는 경우가 많다. 우선순위는 _guess_arch_from_binaries."""
     text = " ".join(signatures).lower()
     # aarch64를 arm보다 먼저 확인해야 ARM으로 잘못 분류되지 않는다.
     for token, label in (
@@ -119,6 +135,77 @@ def _guess_arch(signatures: list[str]) -> str:
         if token in text:
             return label
     return "unknown"
+
+
+def _guess_arch_from_binaries(rootfs: Path, max_files: int = 300) -> tuple[str, str]:
+    """rootfs 안의 실행 파일들을 `file` 명령으로 스캔해 ELF 헤더 기반으로
+    아키텍처/엔디안을 판별한다. 1차 시그니처 스캔보다 훨씬 신뢰도가 높다.
+
+    우선순위: bin/sbin/usr/bin/usr/sbin 등 실행파일이 몰려있는 경로를 먼저 보고,
+    거기서 못 찾으면 rootfs 전체를 순서대로 스캔한다 (max_files 개수 상한).
+    """
+    if shutil.which("file") is None:
+        # file 명령이 없으면 이 판별 자체를 스킵 (호출부에서 시그니처 스캔으로 fallback)
+        return "unknown", "unknown"
+
+    arch_map = (
+        ("aarch64", "AARCH64"),
+        ("mips", "MIPS"),
+        ("arm", "ARM"),
+        ("x86-64", "X86_64"),
+        ("80386", "X86"),
+    )
+
+    priority_dirs = ["bin", "sbin", "usr/bin", "usr/sbin"]
+    candidates: list[Path] = []
+
+    for rel in priority_dirs:
+        d = rootfs / rel
+        if d.is_dir():
+            candidates.extend(p for p in d.rglob("*") if p.is_file() and not p.is_symlink())
+
+    if len(candidates) < max_files:
+        seen = set(candidates)
+        for p in rootfs.rglob("*"):
+            if len(candidates) >= max_files:
+                break
+            if p.is_file() and not p.is_symlink() and p not in seen:
+                candidates.append(p)
+
+    for path in candidates[:max_files]:
+        try:
+            result = subprocess.run(
+                ["file", "-b", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+
+        desc = result.stdout.lower()
+        if "elf" not in desc:
+            continue
+
+        arch = "unknown"
+        for token, label in arch_map:
+            if token in desc:
+                arch = label
+                break
+        if arch == "unknown":
+            continue
+
+        if "msb" in desc:
+            endian = "big"
+        elif "lsb" in desc:
+            endian = "little"
+        else:
+            endian = "unknown"
+
+        return arch, endian
+
+    return "unknown", "unknown"
 
 
 def _guess_endian(scan_text: str) -> str:
